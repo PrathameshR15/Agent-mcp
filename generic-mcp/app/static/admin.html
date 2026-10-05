@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <h2>MCP Platform</h2>
+            <nav>
+                <a href="#" class="nav-item active" data-tab="agents">Agent Registry</a>
+                <a href="#" class="nav-item" data-tab="mcp-entry">MCP Data Entrypoint</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <!-- Agents Tab -->
+            <section id="agents-tab" class="tab-content active">
+                <div class="header">
+                    <h1>Agent Registry</h1>
+                    <button class="btn primary-btn" id="open-register-modal">Register New Agent</button>
+                </div>
+                
+                <div class="agents-grid" id="agents-container">
+                    <!-- Agents populated here by JS -->
+                </div>
+            </section>
+
+            <!-- MCP Entry Tab -->
+            <section id="mcp-entry-tab" class="tab-content">
+                <div class="header">
+                    <h1>MCP Data Entrypoint</h1>
+                </div>
+                <div class="split-layout">
+                    <div class="card form-card">
+                        <h3>Simulated Data Source</h3>
+                        <p style="margin-bottom: 1rem; font-size: 0.875rem; color: var(--text-muted);">
+                            Simulates an external data source (like a traffic camera or IoT sensor) continuously emitting events into the MCP.
+                        </p>
+                        <button id="emit-data-btn" class="btn primary-btn full-width" style="margin-top: 0;">Emit Random Data Event</button>
+                        <div id="emitted-data-display" class="result-box" style="margin-top: 1rem; min-height: 120px;">
+                            <span class="placeholder">Awaiting data emission...</span>
+                        </div>
+                    </div>
+
+                    <div class="card result-card">
+                        <h3>Routing Result</h3>
+                        <div class="result-box" id="routing-result-box" style="margin-bottom: 1rem;">
+                            <span class="placeholder">Awaiting data submission...</span>
+                        </div>
+                        
+                        <h3>Check Final Agent Results</h3>
+                        <div class="job-status-container">
+                            <div class="form-group">
+                                <div class="inline-form">
+                                    <input type="text" id="check-job-id" placeholder="Job ID will auto-fill">
+                                    <button class="btn secondary-btn" id="check-job-btn">Check Results</button>
+                                </div>
+                            </div>
+                            <div class="result-box" id="job-result-box">
+                                <span class="placeholder">Final agent outputs will appear here...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Register Agent Modal -->
+    <div class="modal" id="register-modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Register New Agent</h2>
+            <form id="register-agent-form">
+                <div class="form-group">
+                    <label>Agent ID</label>
+                    <input type="text" id="agent-id" placeholder="e.g., custom-agent-01" required>
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="agent-name" placeholder="Agent Display Name" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="agent-desc" required>
+                </div>
+                <div class="form-group">
+                    <label>Capabilities (comma separated)</label>
+                    <input type="text" id="agent-cap" placeholder="detect_something, process_text" required>
+                </div>
+                <div class="form-group">
+                    <label>Input Types (comma separated)</label>
+                    <input type="text" id="agent-inputs" value="application/json" required>
+                </div>
+                <button type="submit" class="btn primary-btn full-width">Register</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/admin.js"></script>
+</body>
+</html>

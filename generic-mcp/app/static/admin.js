@@ -1,0 +1,188 @@
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Tabs Logic ---
+    const navItems = document.querySelectorAll('.nav-item');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    navItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            navItems.forEach(nav => nav.classList.remove('active'));
+            tabContents.forEach(tab => tab.classList.remove('active'));
+            
+            item.classList.add('active');
+            document.getElementById(item.dataset.tab + '-tab').classList.add('active');
+            
+            if (item.dataset.tab === 'agents') loadAgents();
+        });
+    });
+
+    // --- Modal Logic ---
+    const modal = document.getElementById('register-modal');
+    document.getElementById('open-register-modal').addEventListener('click', () => modal.style.display = 'flex');
+    document.querySelector('.close').addEventListener('click', () => modal.style.display = 'none');
+    window.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+
+    // --- Agent Logic ---
+    async function loadAgents() {
+        try {
+            const res = await fetch('/api/agents');
+            const agents = await res.json();
+            const container = document.getElementById('agents-container');
+            container.innerHTML = '';
+            
+            agents.forEach(agent => {
+                const caps = agent.capabilities.map(c => `<span class="badge">${c}</span>`).join('');
+                container.innerHTML += `
+                    <div class="card">
+                        <h3>${agent.name}</h3>
+                        <p>${agent.description}</p>
+                        <div class="mb-2">
+                            <span class="badge status-active">${agent.status}</span>
+                            <span class="badge">v${agent.version}</span>
+                        </div>
+                        <div><strong>Capabilities:</strong><br>${caps}</div>
+                        <div style="margin-top:0.5rem; font-size:0.75rem; color:#94a3b8">ID: ${agent.agent_id}</div>
+                    </div>
+                `;
+            });
+        } catch (err) {
+            console.error('Failed to load agents', err);
+        }
+    }
+
+    document.getElementById('register-agent-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            agent_id: document.getElementById('agent-id').value,
+            name: document.getElementById('agent-name').value,
+            description: document.getElementById('agent-desc').value,
+            capabilities: document.getElementById('agent-cap').value.split(',').map(s => s.trim()),
+            input_types: document.getElementById('agent-inputs').value.split(',').map(s => s.trim()),
+            output_types: ["application/json"],
+            endpoint: "http://mock-endpoint",
+            version: "1.0",
+            status: "active",
+            priority: 0,
+            metadata: {}
+        };
+
+        try {
+            const res = await fetch('/api/agents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                modal.style.display = 'none';
+                e.target.reset();
+                loadAgents();
+            } else {
+                alert('Failed to register agent');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    });
+
+    // --- Data Source Logic ---
+    const dataSources = [
+        { type: "image/jpeg", payload: { source: "camera_highway_01", event_time: new Date().toISOString(), url: "http://example.com/stream/frame_123.jpg", resolution: "1080p" } },
+        { type: "application/json", payload: { source: "temp_sensor_04", event_time: new Date().toISOString(), temperature: 45.2, unit: "C" } },
+        { type: "image/png", payload: { source: "radar_02", event_time: new Date().toISOString(), url: "http://example.com/radar/scan_456.png" } },
+        { type: "text/csv", payload: { source: "log_batch", event_time: new Date().toISOString(), data: "timestamp,event\\n12345,boot" } }
+    ];
+
+    document.getElementById('emit-data-btn').addEventListener('click', async () => {
+        const resultBox = document.getElementById('routing-result-box');
+        const emittedDisplay = document.getElementById('emitted-data-display');
+        
+        // Generate random data
+        const randomData = dataSources[Math.floor(Math.random() * dataSources.length)];
+        // Update timestamp for freshness
+        if(randomData.payload.event_time) randomData.payload.event_time = new Date().toISOString();
+        
+        emittedDisplay.innerHTML = `<span style="color:var(--primary)">Event Emitted!</span>\n<strong>Data Type:</strong> ${randomData.type}\n<strong>Payload:</strong>\n${JSON.stringify(randomData.payload, null, 2)}`;
+        resultBox.innerHTML = '<span class="placeholder">MCP is routing data...</span>';
+
+        const payload = {
+            data_type: randomData.type,
+            requirements: [], // MCP Router decides based on data_type!
+            payload: randomData.payload
+        };
+
+        try {
+            const res = await fetch('/api/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            
+            if (res.ok) {
+                const agentsList = result.assigned_agents.length > 0 
+                    ? result.assigned_agents.map(a => `<span class="badge status-active">${a}</span>`).join(' ') 
+                    : '<span style="color:red">No agents matched requirements!</span>';
+                
+                resultBox.innerHTML = `
+                    <div style="color: var(--success); margin-bottom: 0.5rem; font-weight: bold;">
+                        ✓ Data successfully routed by MCP!
+                    </div>
+                    <div><strong>Received by Agents:</strong></div>
+                    <div style="margin-top: 0.5rem;">${agentsList}</div>
+                    <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted);">
+                        Job ID: ${result.job_id}
+                    </div>
+                `;
+                document.getElementById('check-job-id').value = result.job_id || '';
+                
+                // Automatically poll for real agent results
+                pollJobResult(result.job_id);
+            } else {
+                resultBox.innerHTML = `<span style="color:red">${result.detail || 'Routing failed'}</span>`;
+            }
+        } catch (err) {
+            resultBox.innerHTML = '<span style="color:red">Error communicating with MCP server.</span>';
+        }
+    });
+
+    async function pollJobResult(jobId) {
+        const resultBox = document.getElementById('job-result-box');
+        resultBox.innerHTML = '<span style="color:var(--primary)">Processing data through agents...</span>';
+        
+        let attempts = 0;
+        const interval = setInterval(async () => {
+            attempts++;
+            try {
+                const res = await fetch(`/api/jobs/${jobId}`);
+                const job = await res.json();
+                
+                if (job.status === 'completed' || job.status === 'failed') {
+                    clearInterval(interval);
+                    resultBox.innerHTML = JSON.stringify(job.results, null, 2);
+                } else if (attempts > 15) {
+                    clearInterval(interval);
+                    resultBox.innerHTML = '<span style="color:red">Timed out waiting for agents.</span>';
+                }
+            } catch (err) {
+                clearInterval(interval);
+                resultBox.innerHTML = '<span style="color:red">Error fetching job status.</span>';
+            }
+        }, 500);
+    }
+
+    document.getElementById('check-job-btn').addEventListener('click', async () => {
+        const id = document.getElementById('check-job-id').value;
+        if (!id) return;
+        
+        try {
+            const res = await fetch(`/api/jobs/${id}`);
+            const result = await res.json();
+            document.getElementById('job-result-box').innerHTML = JSON.stringify(result.results || result, null, 2);
+        } catch (err) {
+            document.getElementById('job-result-box').innerHTML = '<span style="color:red">Job not found or error.</span>';
+        }
+    });
+
+    // Init
+    loadAgents();
+});
