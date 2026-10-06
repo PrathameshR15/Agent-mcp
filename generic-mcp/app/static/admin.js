@@ -145,6 +145,134 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    document.getElementById('fetch-api-btn').addEventListener('click', async () => {
+        const apiUrl = document.getElementById('api-url-input').value;
+        const dataType = document.getElementById('api-data-type-input').value || 'application/json';
+        if (!apiUrl) {
+            alert("Please enter an API URL.");
+            return;
+        }
+
+        const resultBox = document.getElementById('routing-result-box');
+        const emittedDisplay = document.getElementById('emitted-data-display');
+        
+        emittedDisplay.innerHTML = `<span style="color:var(--primary)">Fetching Data from API...</span>\n<strong>URL:</strong> ${apiUrl}\n<strong>Data Type:</strong> ${dataType}`;
+        resultBox.innerHTML = '<span class="placeholder">MCP is fetching and routing data...</span>';
+
+        const payload = {
+            data_type: dataType,
+            requirements: [],
+            api_url: apiUrl
+        };
+
+        try {
+            const res = await fetch('/api/submit_fetch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            
+            if (res.ok) {
+                const agentsList = result.assigned_agents.length > 0 
+                    ? result.assigned_agents.map(a => `<span class="badge status-active">${a}</span>`).join(' ') 
+                    : '<span style="color:red">No agents matched requirements!</span>';
+                
+                resultBox.innerHTML = `
+                    <div style="color: var(--success); margin-bottom: 0.5rem; font-weight: bold;">
+                        ✓ Data successfully fetched and routed by MCP!
+                    </div>
+                    <div><strong>Received by Agents:</strong></div>
+                    <div style="margin-top: 0.5rem;">${agentsList}</div>
+                    <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted);">
+                        Job ID: ${result.job_id}
+                    </div>
+                `;
+                document.getElementById('check-job-id').value = result.job_id || '';
+                
+                pollJobResult(result.job_id);
+            } else {
+                resultBox.innerHTML = `<span style="color:red">${result.detail || 'Routing failed'}</span>`;
+            }
+        } catch (err) {
+            resultBox.innerHTML = '<span style="color:red">Error communicating with MCP server.</span>';
+        }
+    });
+
+    document.getElementById('submit-custom-json-btn').addEventListener('click', async () => {
+        const jsonText = document.getElementById('custom-json-input').value;
+        const reqsText = document.getElementById('custom-requirements-input').value;
+        const fileInput = document.getElementById('custom-image-input');
+        
+        let parsedPayload;
+        try {
+            parsedPayload = JSON.parse(jsonText || '{}');
+        } catch (e) {
+            alert("Invalid JSON format.");
+            return;
+        }
+
+        const requirements = reqsText ? reqsText.split(',').map(s => s.trim()) : [];
+        const resultBox = document.getElementById('routing-result-box');
+        const emittedDisplay = document.getElementById('emitted-data-display');
+
+        const doSubmit = async (finalPayload) => {
+            emittedDisplay.innerHTML = `<span style="color:var(--primary)">Submitting Custom Data...</span>\n<strong>Requirements:</strong> ${requirements.join(', ')}\n<strong>Payload:</strong>\n${JSON.stringify(finalPayload, null, 2).substring(0, 500)}...`;
+            resultBox.innerHTML = '<span class="placeholder">MCP is routing data...</span>';
+
+            const payload = {
+                data_type: "application/json",
+                requirements: requirements,
+                payload: finalPayload
+            };
+
+            try {
+                const res = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+                
+                if (res.ok) {
+                    const agentsList = result.assigned_agents.length > 0 
+                        ? result.assigned_agents.map(a => `<span class="badge status-active">${a}</span>`).join(' ') 
+                        : '<span style="color:red">No agents matched requirements!</span>';
+                    
+                    resultBox.innerHTML = `
+                        <div style="color: var(--success); margin-bottom: 0.5rem; font-weight: bold;">
+                            ✓ Data successfully routed by MCP!
+                        </div>
+                        <div><strong>Received by Agents:</strong></div>
+                        <div style="margin-top: 0.5rem;">${agentsList}</div>
+                        <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted);">
+                            Job ID: ${result.job_id}
+                        </div>
+                    `;
+                    document.getElementById('check-job-id').value = result.job_id || '';
+                    pollJobResult(result.job_id);
+                } else {
+                    resultBox.innerHTML = `<span style="color:red">${result.detail || 'Routing failed'}</span>`;
+                }
+            } catch (err) {
+                resultBox.innerHTML = '<span style="color:red">Error communicating with MCP server.</span>';
+            }
+        };
+
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                parsedPayload.image_base64 = e.target.result.split(',')[1];
+                parsedPayload.image_name = file.name;
+                await doSubmit(parsedPayload);
+            };
+            reader.readAsDataURL(file);
+        } else {
+            await doSubmit(parsedPayload);
+        }
+    });
+
     async function pollJobResult(jobId) {
         const resultBox = document.getElementById('job-result-box');
         resultBox.innerHTML = '<span style="color:var(--primary)">Processing data through agents...</span>';

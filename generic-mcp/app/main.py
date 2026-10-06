@@ -1,10 +1,11 @@
 import asyncio
+import requests
 from typing import Dict, Any, List
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 
 from app.models.domain import AgentRegistration, JobRequest, Job
@@ -16,6 +17,18 @@ from app.dispatcher.dispatcher import AgentDispatcher
 
 app = FastAPI(title="Generic Multi-Agent MCP Platform")
 
+job_queue = asyncio.Queue()
+
+async def job_worker():
+    while True:
+        job, matching_agents = await job_queue.get()
+        try:
+            await dispatcher.dispatch_job(job, matching_agents)
+        except Exception as e:
+            print(f"Job dispatch error: {e}")
+        finally:
+            job_queue.task_done()
+
 # Mount Static Files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -24,68 +37,12 @@ async def admin_dashboard():
     return "app/static/admin.html"
 
 # MCP Server
-mcp = MCPServer("generic-mcp-platform")
+mcp = FastMCP("generic-mcp-platform")
 router = Router(agent_registry)
 dispatcher = AgentDispatcher(job_manager)
 @app.on_event("startup")
 async def startup_event():
-    # Register mock agents for MVP
-    pothole_agent = AgentRegistration(
-        agent_id="pothole-agent-01",
-        name="Pothole Detector",
-        description="Detects potholes in images",
-        capabilities=["detect_pothole"],
-        input_types=["image/jpeg", "image/png"],
-        output_types=["application/json"],
-        endpoint="http://mock-pothole",
-        version="1.0"
-    )
-    speedlimit_agent = AgentRegistration(
-        agent_id="speedlimit-agent-01",
-        name="Speed Limit Detector",
-        description="Detects speed limit signs",
-        capabilities=["detect_speed_limit"],
-        input_types=["image/jpeg", "image/png"],
-        output_types=["application/json"],
-        endpoint="http://mock-speedlimit",
-        version="1.0"
-    )
-    temp_agent = AgentRegistration(
-        agent_id="temp-anomaly-01",
-        name="Temperature Monitor",
-        description="Analyzes temperature sensor data for anomalies",
-        capabilities=["analyze_temperature"],
-        input_types=["application/json"],
-        output_types=["application/json"],
-        endpoint="http://mock-temp",
-        version="1.0"
-    )
-    radar_agent = AgentRegistration(
-        agent_id="radar-agent-01",
-        name="Radar Processor",
-        description="Processes radar image scans for objects",
-        capabilities=["process_radar"],
-        input_types=["image/png"],
-        output_types=["application/json"],
-        endpoint="http://mock-radar",
-        version="1.0"
-    )
-    log_agent = AgentRegistration(
-        agent_id="log-analyzer-01",
-        name="Batch Log Analyzer",
-        description="Parses CSV logs for batch events",
-        capabilities=["parse_logs"],
-        input_types=["text/csv"],
-        output_types=["application/json"],
-        endpoint="http://mock-logs",
-        version="1.0"
-    )
-    
-    agent_registry.register_agent(pothole_agent)
-    agent_registry.register_agent(speedlimit_agent)
-    agent_registry.register_agent(temp_agent)
-    agent_registry.register_agent(radar_agent)
-    agent_registry.register_agent(log_agent)
+    asyncio.create_task(job_worker())
 
 app.mount("/mcp", mcp.sse_app())
 # ----- MCP Platform API -----
@@ -93,6 +50,11 @@ app.mount("/mcp", mcp.sse_app())
 class SubmitDataRequest(BaseModel):
     data_type: str
     payload: Dict[str, Any]
+    requirements: List[str]
+
+class SubmitFetchRequest(BaseModel):
+    data_type: str
+    api_url: str
     requirements: List[str]
 
 @app.post("/api/submit")
@@ -107,8 +69,36 @@ async def submit_data(request: SubmitDataRequest, background_tasks: BackgroundTa
     # Create job
     job = job_manager.create_job(job_req)
     
-    # Dispatch asynchronously
-    background_tasks.add_task(dispatcher.dispatch_job, job, matching_agents)
+    # Push to Queue
+    job_queue.put_nowait((job, matching_agents))
+    
+    return {"job_id": job.job_id, "status": job.status, "assigned_agents": [a.agent_id for a in matching_agents]}
+
+@app.post("/api/submit_fetch")
+async def submit_fetch(request: SubmitFetchRequest, background_tasks: BackgroundTasks):
+    try:
+        response = requests.get(request.api_url, timeout=10)
+        response.raise_for_status()
+        try:
+            payload = response.json()
+        except ValueError:
+            # If not JSON, just wrap the text in a payload
+            payload = {"content": response.text}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch data from API: {str(e)}")
+
+    job_req = ingestor.process_input(request.data_type, payload, request.requirements)
+    
+    # Route to agents
+    matching_agents = router.find_matching_agents(job_req)
+    if not matching_agents:
+        raise HTTPException(status_code=400, detail="No matching agents found for requirements")
+        
+    # Create job
+    job = job_manager.create_job(job_req)
+    
+    # Push to Queue
+    job_queue.put_nowait((job, matching_agents))
     
     return {"job_id": job.job_id, "status": job.status, "assigned_agents": [a.agent_id for a in matching_agents]}
 
@@ -137,8 +127,8 @@ async def submit_job(data_type: str, payload: dict, requirements: list) -> str:
     if not matching_agents:
         return "Error: No matching agents found."
     job = job_manager.create_job(job_req)
-    asyncio.create_task(dispatcher.dispatch_job(job, matching_agents))
-    return f"Job {job.job_id} created and dispatched."
+    job_queue.put_nowait((job, matching_agents))
+    return f"Job {job.job_id} created and queued."
 
 @mcp.tool()
 async def check_job(job_id: str) -> str:

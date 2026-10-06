@@ -30,6 +30,11 @@ uvicorn app.main:app --reload
 curl -X POST http://localhost:8000/api/submit -H "Content-Type: application/json" -d '{"data_type": "image/jpeg", "payload": {"url": "http://example.com/image.jpg"}, "requirements": ["detect_pothole"]}'
 ```
 
+**Submit a Job by Fetching Data from an API:**
+```bash
+curl -X POST http://localhost:8000/api/submit_fetch -H "Content-Type: application/json" -d '{"data_type": "application/json", "api_url": "https://jsonplaceholder.typicode.com/todos/1", "requirements": ["parse_logs"]}'
+```
+
 **Check Job Status:**
 ```bash
 curl http://localhost:8000/api/jobs/<job_id>
