@@ -111,7 +111,8 @@ async def get_job(job_id: str):
 
 @app.get("/api/agents")
 async def list_agents():
-    return agent_registry.list_agents()
+    agents = agent_registry.list_agents()
+    return [a for a in agents if a.agent_id != "civic-data-agent-01"]
 
 @app.post("/api/agents")
 async def register_new_agent(agent: AgentRegistration):

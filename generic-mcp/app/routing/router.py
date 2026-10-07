@@ -15,11 +15,11 @@ class Router:
             if request.data_type not in agent.input_types and "*" not in agent.input_types:
                 continue
                 
-            # Check capabilities
-            has_capabilities = True
+            # Check capabilities (If the agent has ANY of the requested capabilities, select it)
+            has_capabilities = False
             for req in request.requirements:
-                if req not in agent.capabilities:
-                    has_capabilities = False
+                if req in agent.capabilities:
+                    has_capabilities = True
                     break
                     
             if has_capabilities:

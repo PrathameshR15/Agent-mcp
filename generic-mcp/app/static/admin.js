@@ -201,7 +201,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('submit-custom-json-btn').addEventListener('click', async () => {
         const jsonText = document.getElementById('custom-json-input').value;
-        const reqsText = document.getElementById('custom-requirements-input').value;
         const fileInput = document.getElementById('custom-image-input');
         
         let parsedPayload;
@@ -212,17 +211,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const requirements = reqsText ? reqsText.split(',').map(s => s.trim()) : [];
         const resultBox = document.getElementById('routing-result-box');
         const emittedDisplay = document.getElementById('emitted-data-display');
 
         const doSubmit = async (finalPayload) => {
-            emittedDisplay.innerHTML = `<span style="color:var(--primary)">Submitting Custom Data...</span>\n<strong>Requirements:</strong> ${requirements.join(', ')}\n<strong>Payload:</strong>\n${JSON.stringify(finalPayload, null, 2).substring(0, 500)}...`;
+            emittedDisplay.innerHTML = `<span style="color:var(--primary)">Submitting Custom Data...</span>\n<strong>Payload:</strong>\n${JSON.stringify(finalPayload, null, 2).substring(0, 500)}...`;
             resultBox.innerHTML = '<span class="placeholder">MCP is routing data...</span>';
 
             const payload = {
                 data_type: "application/json",
-                requirements: requirements,
+                requirements: [],
                 payload: finalPayload
             };
 
