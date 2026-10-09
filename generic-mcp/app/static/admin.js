@@ -148,6 +148,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('fetch-api-btn').addEventListener('click', async () => {
         const apiUrl = document.getElementById('api-url-input').value;
         const dataType = document.getElementById('api-data-type-input').value || 'application/json';
+        const loginId = document.getElementById('api-login-id').value;
+        const password = document.getElementById('api-password').value;
+        
         if (!apiUrl) {
             alert("Please enter an API URL.");
             return;
@@ -162,7 +165,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             data_type: dataType,
             requirements: [],
-            api_url: apiUrl
+            api_url: apiUrl,
+            username: loginId || undefined,
+            password: password || undefined
         };
 
         try {
@@ -306,6 +311,59 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('job-result-box').innerHTML = JSON.stringify(result.results || result, null, 2);
         } catch (err) {
             document.getElementById('job-result-box').innerHTML = '<span style="color:red">Job not found or error.</span>';
+        }
+    });
+    let currentPollerId = null;
+
+    document.getElementById('start-poll-btn').addEventListener('click', async () => {
+        const apiUrl = document.getElementById('poll-url').value;
+        const loginId = document.getElementById('poll-login-id').value;
+        const password = document.getElementById('poll-password').value;
+        const interval = document.getElementById('poll-interval').value;
+        
+        if (!apiUrl || !loginId) {
+            alert("Please provide both API URL and Login ID.");
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/polling/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_url: apiUrl,
+                    login_id: loginId,
+                    password: password || "",
+                    interval_seconds: parseInt(interval) || 10,
+                    requirements: [] // Left empty so it uses the Semantic Model
+                })
+            });
+            const result = await res.json();
+            if (res.ok) {
+                currentPollerId = result.poller_id;
+                document.getElementById('start-poll-btn').style.display = 'none';
+                document.getElementById('stop-poll-btn').style.display = 'block';
+                document.getElementById('emitted-data-display').innerHTML = `<span style="color:var(--primary)">Polling started! MCP is checking ${apiUrl} every ${interval}s...</span>`;
+            } else {
+                alert("Failed to start polling");
+            }
+        } catch (err) {
+            alert("Error starting polling");
+        }
+    });
+
+    document.getElementById('stop-poll-btn').addEventListener('click', async () => {
+        if (!currentPollerId) return;
+        try {
+            const res = await fetch(`/api/polling/stop/${currentPollerId}`, { method: 'POST' });
+            if (res.ok) {
+                currentPollerId = null;
+                document.getElementById('start-poll-btn').style.display = 'block';
+                document.getElementById('stop-poll-btn').style.display = 'none';
+                document.getElementById('emitted-data-display').innerHTML = `<span style="color:red">Polling stopped.</span>`;
+            }
+        } catch (err) {
+            alert("Error stopping polling");
         }
     });
 
