@@ -1,0 +1,74 @@
+{
+  "alerts": [
+    {
+      "id": "mock-alert-001",
+      "zoneId": "zone-east-01",
+      "cameraId": "camera-gate-01",
+      "eventType": "PERSON_DETECTED",
+      "detectedAt": "2026-10-09T05:30:00.000Z",
+      "snapshotKey": "mock/camera-gate-01/mock-alert-001.jpg",
+      "metadata": {
+        "source": "mock",
+        "confidence": 0.97,
+        "objectType": "person",
+        "description": "Person detected near the main gate",
+        "severity": "medium"
+      },
+      "status": "NEW",
+      "acknowledgedBy": null,
+      "acknowledgedAt": null,
+      "createdAt": "2026-10-09T05:30:02.000Z",
+      "snapshotUrl": "https://example.com/mock-snapshots/mock-alert-001.jpg"
+    },
+    {
+      "id": "mock-alert-002",
+      "zoneId": "zone-loading-02",
+      "cameraId": "camera-loading-02",
+      "eventType": "VEHICLE_DETECTED",
+      "detectedAt": "2026-10-09T05:25:00.000Z",
+      "snapshotKey": "mock/camera-loading-02/mock-alert-002.jpg",
+      "metadata": {
+        "source": "mock",
+        "confidence": 0.93,
+        "objectType": "vehicle",
+        "description": "Vehicle detected in the loading area",
+        "severity": "low"
+      },
+      "status": "NEW",
+      "acknowledgedBy": null,
+      "acknowledgedAt": null,
+      "createdAt": "2026-10-09T05:25:03.000Z",
+      "snapshotUrl": "https://example.com/mock-snapshots/mock-alert-002.jpg"
+    },
+    {
+      "id": "mock-alert-003",
+      "zoneId": "zone-restricted-01",
+      "cameraId": "camera-restricted-01",
+      "eventType": "INTRUSION_DETECTED",
+      "detectedAt": "2026-10-09T05:10:00.000Z",
+      "snapshotKey": "mock/camera-restricted-01/mock-alert-003.jpg",
+      "metadata": {
+        "source": "mock",
+        "confidence": 0.89,
+        "objectType": "person",
+        "description": "Person detected in a restricted area",
+        "severity": "high"
+      },
+      "status": "ACKNOWLEDGED",
+      "acknowledgedBy": "mock-user-01",
+      "acknowledgedAt": "2026-10-09T05:12:00.000Z",
+      "createdAt": "2026-10-09T05:10:02.000Z",
+      "snapshotUrl": "https://example.com/mock-snapshots/mock-alert-003.jpg"
+    }
+  ],
+  "stats": {
+    "total": 3,
+    "new": 2,
+    "last24h": 3,
+    "byEventType": {
+      "PERSON_DETECTED": 1,
+      "VEHICLE_DETECTED": 1,
+      "INTRUSION_DETECTED": 1
+    }
+  }
+}
