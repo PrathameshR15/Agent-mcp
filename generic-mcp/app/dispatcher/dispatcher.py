@@ -6,7 +6,6 @@ from app.adapters.mock_agents import (
     MockPotholeAgentAdapter, MockSpeedLimitAgentAdapter,
     MockTempAnomalyAgentAdapter, MockRadarAgentAdapter, MockLogAnalyzerAgentAdapter
 )
-from app.adapters.mock_alert_agent import MockAlertAgentAdapter
 import requests
 from app.jobs.job_manager import JobManager
 
@@ -57,8 +56,7 @@ class AgentDispatcher:
             "speedlimit-agent-01": MockSpeedLimitAgentAdapter(),
             "temp-anomaly-01": MockTempAnomalyAgentAdapter(),
             "radar-agent-01": MockRadarAgentAdapter(),
-            "log-analyzer-01": MockLogAnalyzerAgentAdapter(),
-            "alert-agent-01": MockAlertAgentAdapter()
+            "log-analyzer-01": MockLogAnalyzerAgentAdapter()
         }
 
     async def dispatch_job(self, job: Job, agents: List[AgentRegistration]):
@@ -97,10 +95,7 @@ class AgentDispatcher:
             # Add timeout handling
             result = await asyncio.wait_for(adapter.process(job_id, payload), timeout=30.0)
             self.job_manager.add_result(job_id, agent_id, result)
-            print(f"\n[Job {job_id}] Agent '{agent_id}' processing completed.\nResult: {result}\n")
         except asyncio.TimeoutError:
             self.job_manager.add_result(job_id, agent_id, {"error": "Agent processing timed out"})
-            print(f"\n[Job {job_id}] Agent '{agent_id}' TIMED OUT.\n")
         except Exception as e:
             self.job_manager.add_result(job_id, agent_id, {"error": str(e)})
-            print(f"\n[Job {job_id}] Agent '{agent_id}' ERROR: {e}\n")

@@ -20,8 +20,7 @@ CAPABILITY_DESCRIPTIONS = {
     "noise_complaints": "handles law enforcement, public safety, parking enforcement, and community policing",
     "fire_hazards": "handles emergency rescue, fire prevention, hazardous materials, and urgent safety threats",
     "park_maintenance": "handles landscaping, public parks, recreation facilities, trees, and green spaces",
-    "water_leaks": "handles plumbing, water supply, sewage, drainage, and liquid utility infrastructure",
-    "process_alert": "handles security cameras, video surveillance, camera alerts, intrusion detection, and monitoring"
+    "water_leaks": "handles plumbing, water supply, sewage, drainage, and liquid utility infrastructure"
 }
 
 CAP_KEYS = list(CAPABILITY_DESCRIPTIONS.keys())

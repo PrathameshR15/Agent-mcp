@@ -60,27 +60,8 @@
                         <h3>Fetch from API URL</h3>
                         <div class="form-group" style="margin-bottom: 1rem;">
                             <input type="text" id="api-url-input" placeholder="https://jsonplaceholder.typicode.com/todos/1" style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-                            <input type="text" id="api-login-id" placeholder="Login ID (optional)" style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-                            <input type="password" id="api-password" placeholder="Password (optional)" style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
                             <input type="text" id="api-data-type-input" placeholder="Data Type (e.g. application/json)" value="application/json" style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
                             <button id="fetch-api-btn" class="btn secondary-btn full-width">Fetch and Submit</button>
-                        </div>
-
-                        <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border-color);">
-
-                        <h3>Continuous Polling (Services)</h3>
-                        <p style="margin-bottom: 1rem; font-size: 0.875rem; color: var(--text-muted);">
-                            Connect a service (like Avinyx) by providing its API URL and Key. The MCP will fetch data repeatedly every X seconds.
-                        </p>
-                        <div class="form-group" style="margin-bottom: 1rem;">
-                            <input type="text" id="poll-url" placeholder="API URL (e.g. http://localhost:3010/alerts)" style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-                            <input type="text" id="poll-login-id" placeholder="Login ID (e.g. admin@acme.test) or type 'none'" style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-                            <input type="password" id="poll-password" placeholder="Password" style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-                            <input type="number" id="poll-interval" placeholder="Interval (seconds)" value="10" style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-                            <div style="display: flex; gap: 0.5rem;">
-                                <button id="start-poll-btn" class="btn primary-btn full-width">Start Polling</button>
-                                <button id="stop-poll-btn" class="btn secondary-btn full-width" style="display:none;">Stop Polling</button>
-                            </div>
                         </div>
 
                         <div id="emitted-data-display" class="result-box" style="margin-top: 1rem; min-height: 120px;">
