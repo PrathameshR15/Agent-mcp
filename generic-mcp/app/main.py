@@ -121,9 +121,37 @@ class SubmitFetchRequest(BaseModel):
     password: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
 
+@app.get("/api/submit")
+async def submit_data_info():
+    return {"message": "POST JSON data to /api/submit to ingest and route events to agents."}
+
 @app.post("/api/submit")
-async def submit_data(request: SubmitDataRequest, background_tasks: BackgroundTasks):
-    job_req = ingestor.process_input(request.data_type, request.payload, request.requirements)
+async def submit_data(raw_request: Request, background_tasks: BackgroundTasks):
+    try:
+        body = await raw_request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Expected valid JSON body")
+
+    # If caller wrapped it in {"payload": ..., "data_type": ...}
+    if isinstance(body, dict) and "payload" in body and isinstance(body.get("payload"), dict):
+        data_type = body.get("data_type", "application/json")
+        payload = body["payload"]
+        requirements = body.get("requirements", [])
+    elif isinstance(body, dict):
+        # Caller posted raw alert data directly
+        data_type = "application/json"
+        payload = body
+        requirements = []
+    elif isinstance(body, list):
+        data_type = "application/json"
+        payload = {"items": body}
+        requirements = []
+    else:
+        data_type = "application/json"
+        payload = {"content": str(body)}
+        requirements = []
+
+    job_req = ingestor.process_input(data_type, payload, requirements)
     
     # Route to agents
     matching_agents = router.find_matching_agents(job_req)
