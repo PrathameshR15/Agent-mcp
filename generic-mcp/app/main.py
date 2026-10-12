@@ -43,6 +43,12 @@ dispatcher = AgentDispatcher(job_manager)
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(job_worker())
+    # Synchronize all registered agents' capabilities into the semantic model
+    for agent in agent_registry.list_agents():
+        for cap in agent.capabilities:
+            if cap:
+                desc = agent.description or f"handles {cap.replace('_', ' ')}"
+                ingestor.register_capability(cap.strip(), desc)
 
 app.mount("/mcp", mcp.sse_app())
 # ----- MCP Platform API -----
@@ -164,7 +170,12 @@ async def submit_data(raw_request: Request, background_tasks: BackgroundTasks):
     # Push to Queue
     job_queue.put_nowait((job, matching_agents))
     
-    return {"job_id": job.job_id, "status": job.status, "assigned_agents": [a.agent_id for a in matching_agents]}
+    return {
+        "job_id": job.job_id,
+        "status": job.status,
+        "assigned_agents": [a.agent_id for a in matching_agents],
+        "assigned_agent_details": [{"agent_id": a.agent_id, "name": a.name} for a in matching_agents]
+    }
 
 @app.post("/api/submit_fetch")
 async def submit_fetch(request: SubmitFetchRequest, background_tasks: BackgroundTasks):
@@ -201,7 +212,12 @@ async def submit_fetch(request: SubmitFetchRequest, background_tasks: Background
     # Push to Queue
     job_queue.put_nowait((job, matching_agents))
     
-    return {"job_id": job.job_id, "status": job.status, "assigned_agents": [a.agent_id for a in matching_agents]}
+    return {
+        "job_id": job.job_id,
+        "status": job.status,
+        "assigned_agents": [a.agent_id for a in matching_agents],
+        "assigned_agent_details": [{"agent_id": a.agent_id, "name": a.name} for a in matching_agents]
+    }
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: str):
@@ -215,10 +231,65 @@ async def list_agents():
     agents = agent_registry.list_agents()
     return [a for a in agents if a.agent_id != "civic-data-agent-01"]
 
+@app.get("/api/agents/health")
+async def check_agents_health():
+    agents = agent_registry.list_agents()
+    agents_to_check = [a for a in agents if a.agent_id != "civic-data-agent-01"]
+
+    async def _check_single(agent: AgentRegistration):
+        if not agent.endpoint or not agent.endpoint.startswith("http") or agent.endpoint == "http://mock-endpoint":
+            return {"agent_id": agent.agent_id, "healthy": True, "status": "online", "details": "Internal Service"}
+
+        headers = {}
+        auth = None
+        if agent.metadata:
+            if "username" in agent.metadata and "password" in agent.metadata:
+                auth = (agent.metadata["username"], agent.metadata["password"])
+            if "auth_header" in agent.metadata and agent.metadata["auth_header"]:
+                raw_auth = str(agent.metadata["auth_header"]).strip()
+                if not raw_auth.lower().startswith("bearer ") and not raw_auth.lower().startswith("apikey "):
+                    headers["Authorization"] = f"Bearer {raw_auth}"
+                else:
+                    headers["Authorization"] = raw_auth
+
+        def _ping():
+            try:
+                resp = requests.get(agent.endpoint, headers=headers, auth=auth, timeout=3)
+                is_online = resp.status_code < 500
+                return {
+                    "agent_id": agent.agent_id,
+                    "healthy": is_online,
+                    "status": "online" if is_online else "offline",
+                    "details": f"HTTP {resp.status_code}" if is_online else f"HTTP {resp.status_code} (Down)"
+                }
+            except requests.exceptions.Timeout:
+                return {"agent_id": agent.agent_id, "healthy": False, "status": "offline", "details": "Timeout"}
+            except Exception as e:
+                return {"agent_id": agent.agent_id, "healthy": False, "status": "offline", "details": "Unreachable"}
+
+        return await asyncio.to_thread(_ping)
+
+    health_results = await asyncio.gather(*[_check_single(a) for a in agents_to_check])
+    return {item["agent_id"]: item for item in health_results}
+
 @app.post("/api/agents")
 async def register_new_agent(agent: AgentRegistration):
-    agent_registry.register_agent(agent)
+    try:
+        agent_registry.register_agent(agent)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    for cap in agent.capabilities:
+        if cap:
+            desc = agent.description or f"handles {cap.replace('_', ' ')}"
+            ingestor.register_capability(cap.strip(), desc)
     return {"status": "success", "agent_id": agent.agent_id}
+
+@app.delete("/api/agents/{agent_id}")
+async def delete_agent(agent_id: str):
+    success = agent_registry.remove_agent(agent_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"status": "success", "agent_id": agent_id}
 
 # Register MCP Tools
 @mcp.tool()

@@ -18,13 +18,20 @@ class Router:
             # Check capabilities (If the agent has ANY of the requested capabilities, select it)
             has_capabilities = False
             for req in request.requirements:
-                if req in agent.capabilities:
+                if req in agent.capabilities or "*" in agent.capabilities:
                     has_capabilities = True
                     break
                     
             if has_capabilities:
                 matching_agents.append(agent)
+
+        # Fallback: if no specific requirement matched, route to active agent matching input_type
+        if not matching_agents and not request.requirements:
+            for agent in active_agents:
+                if request.data_type in agent.input_types or "*" in agent.input_types:
+                    matching_agents.append(agent)
+                    break
                 
-        # Rank by priority (higher is better)
+        # Rank by priority (higher is better) and return the single best matching agent
         matching_agents.sort(key=lambda x: x.priority, reverse=True)
-        return matching_agents
+        return matching_agents[:1]

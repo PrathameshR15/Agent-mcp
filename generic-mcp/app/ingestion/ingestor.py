@@ -46,8 +46,12 @@ class DataIngestor:
     def _auto_detect_requirements(self, data_type: str, payload: Dict[str, Any]) -> List[str]:
         # Extract all text values from the JSON payload
         if isinstance(payload, dict):
-            # Exclude base64 strings if any exist
-            content_str = " ".join([str(v) for k, v in payload.items() if isinstance(v, str) and not k.endswith("base64")])
+            # Include both keys and text values for better semantic matching
+            content_parts = []
+            for k, v in payload.items():
+                if not str(k).endswith("base64") and not str(v).endswith("base64"):
+                    content_parts.append(f"{k}: {v}")
+            content_str = " ".join(content_parts)
         else:
             content_str = str(payload)
             
@@ -67,13 +71,22 @@ class DataIngestor:
         scored_caps.sort(reverse=True, key=lambda x: x[0])
         
         matched_caps = []
-        # Only iterate over the top 2 highest scoring capabilities
-        for score, cap_key in scored_caps[:2]:
+        # Select the single best matching capability
+        for score, cap_key in scored_caps[:1]:
             # Still enforce a minimum threshold just in case
             if score > 0.15:
                 print(f"Auto-routing match: {cap_key} (Score: {score:.2f})")
                 matched_caps.append(cap_key)
                 
         return matched_caps
+
+    def register_capability(self, cap_name: str, description: str):
+        global CAP_KEYS, CAP_TEXTS, CAP_EMBEDDINGS
+        if cap_name not in CAPABILITY_DESCRIPTIONS:
+            CAPABILITY_DESCRIPTIONS[cap_name] = description
+            CAP_KEYS = list(CAPABILITY_DESCRIPTIONS.keys())
+            CAP_TEXTS = list(CAPABILITY_DESCRIPTIONS.values())
+            CAP_EMBEDDINGS = embedding_model.encode(CAP_TEXTS)
+            print(f"[Ingestor] Dynamically registered capability '{cap_name}': {description}")
 
 ingestor = DataIngestor()

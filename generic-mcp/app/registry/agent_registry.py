@@ -10,8 +10,8 @@ class AgentRegistry:
             self._agents[aid] = AgentRegistration(**data)
 
     def register_agent(self, agent: AgentRegistration) -> AgentRegistration:
-        if len(self._agents) >= 10 and agent.agent_id not in self._agents:
-            raise ValueError("Maximum limit of 10 agents reached. Cannot register more agents.")
+        if len(self._agents) >= 50 and agent.agent_id not in self._agents:
+            raise ValueError("Maximum limit of 50 agents reached. Cannot register more agents.")
         self._agents[agent.agent_id] = agent
         db.save_agent(agent.agent_id, agent.model_dump())
         return agent

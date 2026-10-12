@@ -32,38 +32,89 @@ document.addEventListener('DOMContentLoaded', () => {
             
             agents.forEach(agent => {
                 const caps = agent.capabilities.map(c => `<span class="badge">${c}</span>`).join('');
+                const authBadge = agent.metadata && agent.metadata.auth_header ? '<span class="badge" title="Auth Token Active">🔒 Auth Configured</span>' : '';
                 container.innerHTML += `
-                    <div class="card">
-                        <h3>${agent.name}</h3>
+                    <div class="card" id="agent-card-${agent.agent_id}">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <h3>${agent.name}</h3>
+                            <button class="btn secondary-btn" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" onclick="deleteAgent('${agent.agent_id}')">Delete</button>
+                        </div>
                         <p>${agent.description}</p>
                         <div class="mb-2">
-                            <span class="badge status-active">${agent.status}</span>
+                            <span class="badge status-checking" id="health-${agent.agent_id}">Checking status...</span>
                             <span class="badge">v${agent.version}</span>
+                            ${authBadge}
+                        </div>
+                        <div style="margin-bottom: 0.5rem; font-size: 0.8rem; word-break: break-all; color: #38bdf8;">
+                            <strong>Endpoint:</strong> <span>${agent.endpoint}</span>
                         </div>
                         <div><strong>Capabilities:</strong><br>${caps}</div>
                         <div style="margin-top:0.5rem; font-size:0.75rem; color:#94a3b8">ID: ${agent.agent_id}</div>
                     </div>
                 `;
             });
+
+            // Trigger background health checks for all agents
+            checkAgentsHealth();
         } catch (err) {
             console.error('Failed to load agents', err);
         }
     }
 
+    async function checkAgentsHealth() {
+        try {
+            const res = await fetch('/api/agents/health');
+            const healthMap = await res.json();
+            for (const [agentId, info] of Object.entries(healthMap)) {
+                const el = document.getElementById(`health-${agentId}`);
+                if (el) {
+                    if (info.healthy) {
+                        el.className = 'badge status-active';
+                        el.innerHTML = `🟢 Active (Online)`;
+                        el.title = info.details || 'Online';
+                    } else {
+                        el.className = 'badge status-offline';
+                        el.innerHTML = `🔴 Offline`;
+                        el.title = info.details || 'Unreachable';
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Failed to check agent health', err);
+        }
+    }
+
+    window.deleteAgent = async function(agentId) {
+        if (!confirm(`Are you sure you want to remove agent '${agentId}'?`)) return;
+        try {
+            const res = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
+            if (res.ok) {
+                loadAgents();
+            } else {
+                alert('Failed to delete agent');
+            }
+        } catch (err) {
+            alert('Error deleting agent');
+        }
+    };
+
     document.getElementById('register-agent-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const endpointVal = document.getElementById('agent-endpoint').value.trim();
+        const authVal = document.getElementById('agent-auth').value.trim();
+        
         const payload = {
-            agent_id: document.getElementById('agent-id').value,
-            name: document.getElementById('agent-name').value,
-            description: document.getElementById('agent-desc').value,
-            capabilities: document.getElementById('agent-cap').value.split(',').map(s => s.trim()),
-            input_types: document.getElementById('agent-inputs').value.split(',').map(s => s.trim()),
+            agent_id: document.getElementById('agent-id').value.trim(),
+            name: document.getElementById('agent-name').value.trim(),
+            description: document.getElementById('agent-desc').value.trim(),
+            capabilities: document.getElementById('agent-cap').value.split(',').map(s => s.trim()).filter(Boolean),
+            input_types: document.getElementById('agent-inputs').value.split(',').map(s => s.trim()).filter(Boolean),
             output_types: ["application/json"],
-            endpoint: "http://mock-endpoint",
+            endpoint: endpointVal,
             version: "1.0",
             status: "active",
             priority: 0,
-            metadata: {}
+            metadata: authVal ? { auth_header: authVal } : {}
         };
 
         try {
@@ -77,10 +128,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.target.reset();
                 loadAgents();
             } else {
-                alert('Failed to register agent');
+                const errData = await res.json();
+                alert('Failed to register agent: ' + (errData.detail || 'Error'));
             }
         } catch (err) {
             console.error(err);
+            alert('Failed to register agent');
         }
     });
 
@@ -91,6 +144,16 @@ document.addEventListener('DOMContentLoaded', () => {
         { type: "image/png", payload: { source: "radar_02", event_time: new Date().toISOString(), url: "http://example.com/radar/scan_456.png" } },
         { type: "text/csv", payload: { source: "log_batch", event_time: new Date().toISOString(), data: "timestamp,event\\n12345,boot" } }
     ];
+
+    function formatAssignedAgents(result) {
+        if (result.assigned_agent_details && result.assigned_agent_details.length > 0) {
+            return result.assigned_agent_details.map(a => `<span class="badge status-active">${a.name} (ID: ${a.agent_id})</span>`).join(' ');
+        }
+        if (result.assigned_agents && result.assigned_agents.length > 0) {
+            return result.assigned_agents.map(a => `<span class="badge status-active">${a}</span>`).join(' ');
+        }
+        return '<span style="color:red">No agents matched requirements!</span>';
+    }
 
     document.getElementById('emit-data-btn').addEventListener('click', async () => {
         const resultBox = document.getElementById('routing-result-box');
@@ -106,7 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const payload = {
             data_type: randomData.type,
-            requirements: [], // MCP Router decides based on data_type!
+            requirements: [],
             payload: randomData.payload
         };
 
@@ -119,9 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await res.json();
             
             if (res.ok) {
-                const agentsList = result.assigned_agents.length > 0 
-                    ? result.assigned_agents.map(a => `<span class="badge status-active">${a}</span>`).join(' ') 
-                    : '<span style="color:red">No agents matched requirements!</span>';
+                const agentsList = formatAssignedAgents(result);
                 
                 resultBox.innerHTML = `
                     <div style="color: var(--success); margin-bottom: 0.5rem; font-weight: bold;">
@@ -178,9 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await res.json();
             
             if (res.ok) {
-                const agentsList = result.assigned_agents.length > 0 
-                    ? result.assigned_agents.map(a => `<span class="badge status-active">${a}</span>`).join(' ') 
-                    : '<span style="color:red">No agents matched requirements!</span>';
+                const agentsList = formatAssignedAgents(result);
                 
                 resultBox.innerHTML = `
                     <div style="color: var(--success); margin-bottom: 0.5rem; font-weight: bold;">
@@ -237,9 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await res.json();
                 
                 if (res.ok) {
-                    const agentsList = result.assigned_agents.length > 0 
-                        ? result.assigned_agents.map(a => `<span class="badge status-active">${a}</span>`).join(' ') 
-                        : '<span style="color:red">No agents matched requirements!</span>';
+                    const agentsList = formatAssignedAgents(result);
                     
                     resultBox.innerHTML = `
                         <div style="color: var(--success); margin-bottom: 0.5rem; font-weight: bold;">
