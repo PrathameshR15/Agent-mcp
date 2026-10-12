@@ -1,6 +1,6 @@
 import asyncio
 import requests
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -47,6 +47,66 @@ async def startup_event():
 app.mount("/mcp", mcp.sse_app())
 # ----- MCP Platform API -----
 
+class StartPollingRequest(BaseModel):
+    api_url: str
+    login_id: str
+    password: str
+    interval_seconds: int = 10
+    requirements: List[str] = []
+
+active_pollers = {}
+
+async def poll_service_task(poller_id: str, req: StartPollingRequest):
+    while poller_id in active_pollers:
+        try:
+            headers = {}
+            auth = None
+            if req.login_id and req.login_id.lower() == "bearer":
+                headers["Authorization"] = f"Bearer {req.password}"
+            elif req.password and (req.password.startswith("ey") or req.login_id.lower() in ["none", ""]):
+                headers["Authorization"] = f"Bearer {req.password}"
+            elif req.login_id and req.login_id.lower() != "none" and req.password:
+                auth = (req.login_id, req.password)
+            
+            resp = await asyncio.to_thread(requests.get, req.api_url, auth=auth, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                try:
+                    payload = resp.json()
+                except ValueError:
+                    payload = {"content": resp.text}
+                
+                print(f"[Polling {poller_id}] Successfully fetched data from {req.api_url}")
+                job_req = ingestor.process_input("application/json", payload, req.requirements)
+                matching_agents = router.find_matching_agents(job_req)
+                if matching_agents:
+                    job = job_manager.create_job(job_req)
+                    job_queue.put_nowait((job, matching_agents))
+                    print(f"[Polling {poller_id}] Created job {job.job_id} assigned to agents: {[a.agent_id for a in matching_agents]}")
+                else:
+                    print(f"[Polling {poller_id}] WARNING: Data fetched but NO MATCHING AGENTS found for requirements {req.requirements}!")
+            else:
+                print(f"[Polling {poller_id}] Failed with status {resp.status_code}: {resp.text}")
+        except Exception as e:
+            print(f"[Polling {poller_id}] Error: {e}")
+        
+        await asyncio.sleep(req.interval_seconds)
+
+@app.post("/api/polling/start")
+async def start_polling(request: StartPollingRequest):
+    import uuid
+    poller_id = str(uuid.uuid4())
+    task = asyncio.create_task(poll_service_task(poller_id, request))
+    active_pollers[poller_id] = task
+    return {"status": "started", "poller_id": poller_id}
+
+@app.post("/api/polling/stop/{poller_id}")
+async def stop_polling(poller_id: str):
+    if poller_id in active_pollers:
+        active_pollers[poller_id].cancel()
+        del active_pollers[poller_id]
+        return {"status": "stopped", "poller_id": poller_id}
+    raise HTTPException(status_code=404, detail="Poller not found")
+
 class SubmitDataRequest(BaseModel):
     data_type: str
     payload: Dict[str, Any]
@@ -56,6 +116,10 @@ class SubmitFetchRequest(BaseModel):
     data_type: str
     api_url: str
     requirements: List[str]
+    # optional authentication for secure endpoints
+    username: Optional[str] = None
+    password: Optional[str] = None
+    headers: Optional[Dict[str, str]] = None
 
 @app.post("/api/submit")
 async def submit_data(request: SubmitDataRequest, background_tasks: BackgroundTasks):
@@ -77,7 +141,16 @@ async def submit_data(request: SubmitDataRequest, background_tasks: BackgroundTa
 @app.post("/api/submit_fetch")
 async def submit_fetch(request: SubmitFetchRequest, background_tasks: BackgroundTasks):
     try:
-        response = requests.get(request.api_url, timeout=10)
+        headers = request.headers or {}
+        auth = None
+        if request.username and request.username.lower() == "bearer":
+            headers["Authorization"] = f"Bearer {request.password}"
+        elif request.password and (request.password.startswith("ey") or (request.username and request.username.lower() in ["none", ""])):
+            headers["Authorization"] = f"Bearer {request.password}"
+        elif request.username and request.password:
+            auth = (request.username, request.password)
+
+        response = requests.get(request.api_url, timeout=10, auth=auth, headers=headers)
         response.raise_for_status()
         try:
             payload = response.json()
@@ -138,3 +211,24 @@ async def check_job(job_id: str) -> str:
     if not job:
         return "Error: Job not found."
     return f"Status: {job.status}. Results: {job.results}"
+
+@mcp.tool()
+async def get_camera_alert(alertId: str, userToken: str) -> str:
+    """Fetch details of a camera alert from Avinyx platform by its alert ID"""
+    import json
+    try:
+        url = f"https://chancellor-pirates-may-digit.trycloudflare.com/alerts/{alertId}"
+        headers = {
+            "Authorization": f"Bearer {userToken}",
+            "Content-Type": "application/json"
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return json.dumps(response.json(), indent=2)
+    except Exception as e:
+        return f"Failed to fetch alert: {str(e)}"
+
+
+
+
+

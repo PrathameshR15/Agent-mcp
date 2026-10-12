@@ -24,16 +24,16 @@ class GenericHttpAgentAdapter(BaseAgentAdapter):
                 if "image_base64" in data:
                     img_bytes = base64.b64decode(data.pop("image_base64"))
                     img_name = data.pop("image_name", "upload.jpg")
-                    files = {"file": (img_name, img_bytes, "image/jpeg")} # The agent receives it as a 'file' parameter
+                    files = {"file": (img_name, img_bytes, "image/jpeg")}
                 
-                # Convert the remaining data payload into flat string key-value pairs for form-data
                 form_data = {str(k): str(v) for k, v in data.items()}
                 
+                print(f"[{job_id}] Receiver: alert agent ({self.endpoint})")
+                print(f"[{job_id}] Telegram webhook with data payload msg: {data}")
+                
                 if files:
-                    # Automatically sends as multipart/form-data
                     resp = requests.post(self.endpoint, data=form_data, files=files, timeout=15, auth=self.auth)
                 else:
-                    # Automatically sends as application/x-www-form-urlencoded
                     resp = requests.post(self.endpoint, data=form_data, timeout=15, auth=self.auth)
                     
                 return resp.json()
@@ -93,6 +93,7 @@ class AgentDispatcher:
     async def _execute_agent_task(self, job_id: str, agent_id: str, adapter: BaseAgentAdapter, payload: Dict[str, Any]):
         try:
             # Add timeout handling
+            print(f"[{job_id}] Selected Agent: {agent_id}")
             result = await asyncio.wait_for(adapter.process(job_id, payload), timeout=30.0)
             self.job_manager.add_result(job_id, agent_id, result)
         except asyncio.TimeoutError:
