@@ -35,7 +35,7 @@ class AgentRegistration(BaseModel):
 class JobRequest(BaseModel):
     data_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     data_type: str
-    payload: Dict[str, Any]
+    payload: Any
     requirements: List[str]
 
 class Job(BaseModel):

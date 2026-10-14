@@ -30,7 +30,13 @@ CAP_TEXTS = list(CAPABILITY_DESCRIPTIONS.values())
 CAP_EMBEDDINGS = embedding_model.encode(CAP_TEXTS)
 
 class DataIngestor:
-    def process_input(self, data_type: str, payload: Dict[str, Any], requirements: List[str]) -> JobRequest:
+    def process_input(self, data_type: str, payload: Any, requirements: List[str]) -> JobRequest:
+        # Normalize payload to dictionary if it is a list or primitive
+        if isinstance(payload, list):
+            payload = {"items": payload}
+        elif not isinstance(payload, dict):
+            payload = {"content": str(payload)}
+
         # Auto-detect requirements if none are provided
         if not requirements:
             requirements = self._auto_detect_requirements(data_type, payload)
@@ -43,18 +49,20 @@ class DataIngestor:
         )
         return request
 
-    def _auto_detect_requirements(self, data_type: str, payload: Dict[str, Any]) -> List[str]:
-        # Extract all text values from the JSON payload
-        if isinstance(payload, dict):
-            # Include both keys and text values for better semantic matching
-            content_parts = []
-            for k, v in payload.items():
-                if not str(k).endswith("base64") and not str(v).endswith("base64"):
-                    content_parts.append(f"{k}: {v}")
-            content_str = " ".join(content_parts)
-        else:
-            content_str = str(payload)
-            
+    def _auto_detect_requirements(self, data_type: str, payload: Any) -> List[str]:
+        # Recursively extract all text keys and values from the JSON payload
+        def _extract_text(obj):
+            if isinstance(obj, dict):
+                parts = []
+                for k, v in obj.items():
+                    if not str(k).endswith("base64") and not str(v).endswith("base64"):
+                        parts.append(f"{k}: {_extract_text(v)}")
+                return " ".join(parts)
+            elif isinstance(obj, list):
+                return " ".join([_extract_text(item) for item in obj])
+            return str(obj)
+
+        content_str = _extract_text(payload)
         if not content_str.strip():
             return []
             
