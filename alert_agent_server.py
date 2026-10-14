@@ -5,8 +5,21 @@ import json
 import asyncio
 import uvicorn
 
+import os
+from pathlib import Path
+
+# Load .env if present
+env_path = Path(__file__).resolve().parent / ".env"
+if env_path.exists():
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+
 app = FastAPI(title="Alert Agent Frontend")
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1547479599074779216/gEpmw1XRxwJGlQ3mu9F5cAnBQc-e_MWL2TfDGlGXUSOcGnrCTMS_dDYduCmQLzEKVbvo"
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 # Store recent alerts in memory
 recent_alerts = []
@@ -75,10 +88,13 @@ async def process_alert(request: Request):
     discord_payload = {
         "content": f"🚨 **New Alert Received!** 🚨\n```json\n{json.dumps(data, indent=2)}\n```"
     }
-    try:
-        requests.post(DISCORD_WEBHOOK_URL, json=discord_payload)
-    except Exception as e:
-        print(f"❌ Failed to send to Discord: {e}")
+    if DISCORD_WEBHOOK_URL:
+        try:
+            requests.post(DISCORD_WEBHOOK_URL, json=discord_payload)
+        except Exception as e:
+            print(f"❌ Failed to send to Discord: {e}")
+    else:
+        print("ℹ️ DISCORD_WEBHOOK_URL not configured.")
 
     return {"status": "success", "message": "Alert processed and sent to Discord!"}
 

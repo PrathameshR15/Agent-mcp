@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -21,7 +21,18 @@ env/
 Thumbs.db
 .DS_Store
 
-# Environment variables
+# Environment variables and API secrets
 .env
+.env.*
+!.env.example
+*.env
+*.key
+*.pem
+*.token
+secrets/
+
+# Database files
 generic-mcp/mcp.db
 *.db
+*.sqlite
+*.sqlite3

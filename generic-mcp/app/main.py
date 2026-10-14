@@ -1,5 +1,7 @@
 import asyncio
+import os
 import requests
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
@@ -8,7 +10,18 @@ from pydantic import BaseModel
 from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 
-from app.models.domain import AgentRegistration, JobRequest, Job
+# Load .env if present
+for env_candidate in [Path(".env"), Path("../.env")]:
+    if env_candidate.exists():
+        with open(env_candidate, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+        break
+
+from app.models.domain import AgentRegistration, JobRequest, Job, AgentStatus
 from app.registry.agent_registry import agent_registry
 from app.routing.router import Router
 from app.jobs.job_manager import job_manager
@@ -284,6 +297,40 @@ async def register_new_agent(agent: AgentRegistration):
             ingestor.register_capability(cap.strip(), desc)
     return {"status": "success", "agent_id": agent.agent_id}
 
+class UpdateAgentRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    capabilities: Optional[List[str]] = None
+    input_types: Optional[List[str]] = None
+    output_types: Optional[List[str]] = None
+    endpoint: Optional[str] = None
+    version: Optional[str] = None
+    status: Optional[AgentStatus] = None
+    priority: Optional[int] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+@app.get("/api/agents/{agent_id}")
+async def get_agent(agent_id: str):
+    agent = agent_registry.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+@app.put("/api/agents/{agent_id}")
+async def update_agent_endpoint(agent_id: str, updates: UpdateAgentRequest):
+    update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
+    updated_agent = agent_registry.update_agent(agent_id, update_data)
+    if not updated_agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    if updated_agent.capabilities:
+        for cap in updated_agent.capabilities:
+            if cap:
+                desc = updated_agent.description or f"handles {cap.replace('_', ' ')}"
+                ingestor.register_capability(cap.strip(), desc)
+
+    return {"status": "success", "agent": updated_agent}
+
 @app.delete("/api/agents/{agent_id}")
 async def delete_agent(agent_id: str):
     success = agent_registry.remove_agent(agent_id)
@@ -316,7 +363,8 @@ async def get_camera_alert(alertId: str, userToken: str) -> str:
     """Fetch details of a camera alert from Avinyx platform by its alert ID"""
     import json
     try:
-        url = f"https://chancellor-pirates-may-digit.trycloudflare.com/alerts/{alertId}"
+        base_url = os.getenv("CLOUDFLARE_ALERTS_API", "https://chancellor-pirates-may-digit.trycloudflare.com/alerts").rstrip("/")
+        url = f"{base_url}/{alertId}"
         headers = {
             "Authorization": f"Bearer {userToken}",
             "Content-Type": "application/json"

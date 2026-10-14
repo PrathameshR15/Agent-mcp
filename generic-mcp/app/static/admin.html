@@ -151,6 +151,46 @@
         </div>
     </div>
 
+    <!-- Edit Agent Modal -->
+    <div class="modal" id="edit-modal">
+        <div class="modal-content">
+            <span class="close" id="close-edit-modal">&times;</span>
+            <h2>Edit Agent</h2>
+            <form id="edit-agent-form">
+                <input type="hidden" id="edit-agent-id">
+                <div class="form-group">
+                    <label>Agent ID</label>
+                    <input type="text" id="edit-agent-id-display" disabled style="opacity: 0.6; cursor: not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="edit-agent-name" placeholder="Agent Display Name" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="edit-agent-desc" required>
+                </div>
+                <div class="form-group">
+                    <label>Capabilities (comma separated)</label>
+                    <input type="text" id="edit-agent-cap" placeholder="detect_something, process_text" required>
+                </div>
+                <div class="form-group">
+                    <label>Webhook / API URL</label>
+                    <input type="text" id="edit-agent-endpoint" placeholder="e.g. https://<agent-tunnel>/process_alert" required>
+                </div>
+                <div class="form-group">
+                    <label>Auth Header / Token (Optional)</label>
+                    <input type="text" id="edit-agent-auth" placeholder="e.g. Bearer my-secret-token or ApiKey xyz">
+                </div>
+                <div class="form-group">
+                    <label>Input Types (comma separated)</label>
+                    <input type="text" id="edit-agent-inputs" value="application/json" required>
+                </div>
+                <button type="submit" class="btn primary-btn full-width">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
     <script src="/static/admin.js"></script>
 </body>
 </html>

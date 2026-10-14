@@ -17,27 +17,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Modal Logic ---
-    const modal = document.getElementById('register-modal');
-    document.getElementById('open-register-modal').addEventListener('click', () => modal.style.display = 'flex');
-    document.querySelector('.close').addEventListener('click', () => modal.style.display = 'none');
-    window.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+    const registerModal = document.getElementById('register-modal');
+    const editModal = document.getElementById('edit-modal');
+    document.getElementById('open-register-modal').addEventListener('click', () => registerModal.style.display = 'flex');
+    registerModal.querySelector('.close').addEventListener('click', () => registerModal.style.display = 'none');
+    document.getElementById('close-edit-modal').addEventListener('click', () => editModal.style.display = 'none');
+    window.addEventListener('click', (e) => { 
+        if (e.target === registerModal) registerModal.style.display = 'none'; 
+        if (e.target === editModal) editModal.style.display = 'none'; 
+    });
 
     // --- Agent Logic ---
+    let agentsCache = {};
     async function loadAgents() {
         try {
             const res = await fetch('/api/agents');
             const agents = await res.json();
+            agentsCache = {};
             const container = document.getElementById('agents-container');
             container.innerHTML = '';
             
             agents.forEach(agent => {
+                agentsCache[agent.agent_id] = agent;
                 const caps = agent.capabilities.map(c => `<span class="badge">${c}</span>`).join('');
                 const authBadge = agent.metadata && agent.metadata.auth_header ? '<span class="badge" title="Auth Token Active">🔒 Auth Configured</span>' : '';
                 container.innerHTML += `
                     <div class="card" id="agent-card-${agent.agent_id}">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <h3>${agent.name}</h3>
-                            <button class="btn secondary-btn" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" onclick="deleteAgent('${agent.agent_id}')">Delete</button>
+                            <div style="display: flex; gap: 0.4rem;">
+                                <button class="btn secondary-btn" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" onclick="openEditModal('${agent.agent_id}')">Edit</button>
+                                <button class="btn secondary-btn" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" onclick="deleteAgent('${agent.agent_id}')">Delete</button>
+                            </div>
                         </div>
                         <p>${agent.description}</p>
                         <div class="mb-2">
@@ -84,6 +95,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    window.openEditModal = function(agentId) {
+        const agent = agentsCache[agentId];
+        if (!agent) return;
+        document.getElementById('edit-agent-id').value = agent.agent_id;
+        document.getElementById('edit-agent-id-display').value = agent.agent_id;
+        document.getElementById('edit-agent-name').value = agent.name || '';
+        document.getElementById('edit-agent-desc').value = agent.description || '';
+        document.getElementById('edit-agent-cap').value = (agent.capabilities || []).join(', ');
+        document.getElementById('edit-agent-endpoint').value = agent.endpoint || '';
+        document.getElementById('edit-agent-auth').value = (agent.metadata && agent.metadata.auth_header) || '';
+        document.getElementById('edit-agent-inputs').value = (agent.input_types || []).join(', ');
+        editModal.style.display = 'flex';
+    };
+
     window.deleteAgent = async function(agentId) {
         if (!confirm(`Are you sure you want to remove agent '${agentId}'?`)) return;
         try {
@@ -124,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(payload)
             });
             if (res.ok) {
-                modal.style.display = 'none';
+                registerModal.style.display = 'none';
                 e.target.reset();
                 loadAgents();
             } else {
@@ -134,6 +159,48 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error(err);
             alert('Failed to register agent');
+        }
+    });
+
+    document.getElementById('edit-agent-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const agentId = document.getElementById('edit-agent-id').value;
+        const currentAgent = agentsCache[agentId] || {};
+        const endpointVal = document.getElementById('edit-agent-endpoint').value.trim();
+        const authVal = document.getElementById('edit-agent-auth').value.trim();
+
+        const metadata = { ...(currentAgent.metadata || {}) };
+        if (authVal) {
+            metadata.auth_header = authVal;
+        } else {
+            delete metadata.auth_header;
+        }
+
+        const payload = {
+            name: document.getElementById('edit-agent-name').value.trim(),
+            description: document.getElementById('edit-agent-desc').value.trim(),
+            capabilities: document.getElementById('edit-agent-cap').value.split(',').map(s => s.trim()).filter(Boolean),
+            endpoint: endpointVal,
+            input_types: document.getElementById('edit-agent-inputs').value.split(',').map(s => s.trim()).filter(Boolean),
+            metadata: metadata
+        };
+
+        try {
+            const res = await fetch(`/api/agents/${agentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                editModal.style.display = 'none';
+                loadAgents();
+            } else {
+                const errData = await res.json();
+                alert('Failed to update agent: ' + (errData.detail || 'Error'));
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to update agent');
         }
     });
 
